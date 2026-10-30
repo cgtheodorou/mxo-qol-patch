@@ -1,5 +1,5 @@
-// MXO QoL Patch installer: borderless window, DXVK, mxoperf and hardware vertex processing for
-// The Matrix Online 7.6005.
+// MXO QoL Patch installer: borderless window, DXVK, mxoperf, hardware vertex processing and the
+// alt-tab music fix for The Matrix Online 7.6005.
 // Build: build.cmd (uses the .NET Framework 4 csc.exe that ships with Windows).
 using System;
 using System.Collections.Generic;
@@ -15,21 +15,22 @@ using Microsoft.Win32;
 
 static class Program
 {
-    public const string Version = "1.0.2";
+    public const string Version = "1.1.0";
 
     [STAThread]
     static int Main(string[] args)
     {
-        // Command line: /install "<MxO folder>" [/nodxvk] [/noborderless] [/noperf]   |   /uninstall "<MxO folder>"
+        // Command line: /install "<MxO folder>" [/nodxvk] [/noborderless] [/noperf] [/nomusic]   |   /uninstall "<MxO folder>"
         if (args.Length >= 2 && (Is(args[0], "/install") || Is(args[0], "/uninstall")))
         {
             Native.AttachConsole(-1);
-            var opt = new Options { Dxvk = true, Borderless = true, Perf = true };
+            var opt = new Options { Dxvk = true, Borderless = true, Perf = true, Music = true };
             for (int i = 2; i < args.Length; i++)
             {
                 if (Is(args[i], "/nodxvk")) opt.Dxvk = false;
                 if (Is(args[i], "/noborderless")) opt.Borderless = false;
                 if (Is(args[i], "/noperf")) opt.Perf = false;
+                if (Is(args[i], "/nomusic")) opt.Music = false;
             }
             var p = new Patcher(args[1], Console.WriteLine);
             bool ok = Is(args[0], "/install") ? p.Install(opt) : p.Uninstall();
@@ -43,7 +44,7 @@ static class Program
     static bool Is(string a, string b) { return string.Equals(a, b, StringComparison.OrdinalIgnoreCase); }
 }
 
-class Options { public bool Dxvk, Borderless, Perf; }
+class Options { public bool Dxvk, Borderless, Perf, Music; }
 
 class Patcher
 {
@@ -80,6 +81,7 @@ class Patcher
             Directory.CreateDirectory(backup);
 
             if (!PatchClient()) return false;
+            if (!PatchMusic(opt.Music)) return false;
 
             var files = new List<string>();
             // r3dx.dll: the player's own r3d9.dll, importing dxv9.dll (DXVK) instead of d3d9.dll.
@@ -158,6 +160,45 @@ class Patcher
         File.WriteAllBytes(client, buf);
         log("  client.dll patched (borderless, DXVK loader, mxoperf hook, hardware vertex processing).");
         return true;
+    }
+
+    // Alt-tab music fix: restoring the game from a minimised fullscreen window runs the music "pause"
+    // twice, and the second run saves the already-zero volume over the real one. The fixed pause only
+    // saves the volume when it is not zero. Found by pattern (the pause plus the resume that follows it).
+    const string MusicOriginal = "558BEC568BF18A461584C074138B06FF5044D95E648B45088B16508BCEFF52485E5DC20400CCCCCCCCCCCCCCCCCCCCCC";
+    const string MusicFixed = "558BEC568BF1807E150074158B460485C074038946648B45088B16508BCEFF52485E5DC20400CCCCCCCCCCCCCCCCCCCC";
+    const string MusicResume = "8A411584C074098B51648B0152FF5048C3";
+
+    bool PatchMusic(bool on)
+    {
+        byte[] orig = Hex(MusicOriginal), fix = Hex(MusicFixed);
+        byte[] tail = Hex(MusicResume);
+        byte[] buf = File.ReadAllBytes(client);
+        int atOrig = FindOnce(buf, Concat(orig, tail)), atFix = FindOnce(buf, Concat(fix, tail));
+        if (on)
+        {
+            if (atFix >= 0) { log("  Music fix already in client.dll."); return true; }
+            if (atOrig < 0) return Fail("Couldn't find the music code in client.dll (unknown build). Untick the music fix and try again.");
+            Buffer.BlockCopy(fix, 0, buf, atOrig, fix.Length);
+            File.WriteAllBytes(client, buf);
+            log("  Music fix on (music no longer goes silent after alt-tab).");
+        }
+        else if (atFix >= 0)
+        {
+            Buffer.BlockCopy(orig, 0, buf, atFix, orig.Length);
+            File.WriteAllBytes(client, buf);
+            log("  Music fix off.");
+        }
+        else log("  Music fix off.");
+        return true;
+    }
+
+    static byte[] Concat(byte[] a, byte[] b)
+    {
+        var r = new byte[a.Length + b.Length];
+        Buffer.BlockCopy(a, 0, r, 0, a.Length);
+        Buffer.BlockCopy(b, 0, r, a.Length, b.Length);
+        return r;
     }
 
     // ------------------------------------------------------------------ uninstall
@@ -274,7 +315,7 @@ static class Native
 class MainForm : Form
 {
     readonly TextBox folder = new TextBox();
-    readonly CheckBox dxvk = new CheckBox(), borderless = new CheckBox(), perf = new CheckBox();
+    readonly CheckBox dxvk = new CheckBox(), borderless = new CheckBox(), perf = new CheckBox(), music = new CheckBox();
     readonly Button install = new Button(), uninstall = new Button();
     readonly TextBox logBox = new TextBox();
     readonly Label status = new Label();
@@ -286,7 +327,7 @@ class MainForm : Form
         AutoScaleDimensions = new SizeF(7f, 15f);
         AutoScaleMode = AutoScaleMode.Font;
         Text = "MXO QoL Patch " + Program.Version;
-        ClientSize = new Size(560, 440);
+        ClientSize = new Size(560, 466);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
@@ -313,23 +354,24 @@ class MainForm : Form
         dxvk.Text = "DXVK - Vulkan renderer (untick if the game won't start)";
         borderless.Text = "Borderless window at your desktop resolution";
         perf.Text = "mxoperf - FPS cap, FPS overlay, fast-core pinning (mxoperf.ini)";
+        music.Text = "Fix music going silent after alt-tab";
         int y = 116;
-        foreach (var c in new[] { dxvk, borderless, perf })
+        foreach (var c in new[] { dxvk, borderless, perf, music })
         {
             c.Checked = true; c.AutoSize = true; c.Location = new Point(12, y); y += 26;
         }
 
-        install.Text = "Install"; install.Location = new Point(12, 200); install.Size = new Size(110, 30);
-        uninstall.Text = "Uninstall"; uninstall.Location = new Point(130, 200); uninstall.Size = new Size(110, 30);
+        install.Text = "Install"; install.Location = new Point(12, 226); install.Size = new Size(110, 30);
+        uninstall.Text = "Uninstall"; uninstall.Location = new Point(130, 226); uninstall.Size = new Size(110, 30);
         install.Click += delegate { Run(true); };
         uninstall.Click += delegate { Run(false); };
-        status.Location = new Point(252, 207); status.AutoSize = true;
+        status.Location = new Point(252, 233); status.AutoSize = true;
 
         logBox.Multiline = true; logBox.ReadOnly = true; logBox.ScrollBars = ScrollBars.Vertical;
-        logBox.Location = new Point(12, 240); logBox.Size = new Size(536, 188);
+        logBox.Location = new Point(12, 266); logBox.Size = new Size(536, 188);
         logBox.BackColor = SystemColors.Window;
 
-        Controls.AddRange(new Control[] { intro, folderLabel, folder, browse, dxvk, borderless, perf, install, uninstall, status, logBox });
+        Controls.AddRange(new Control[] { intro, folderLabel, folder, browse, dxvk, borderless, perf, music, install, uninstall, status, logBox });
         ResumeLayout(false);
         PerformLayout();
         folder.Text = DetectFolder();
@@ -351,7 +393,7 @@ class MainForm : Form
         logBox.Clear();
         var p = new Patcher(folder.Text, delegate(string s) { logBox.AppendText(s + Environment.NewLine); });
         Cursor = Cursors.WaitCursor;
-        if (doInstall) p.Install(new Options { Dxvk = dxvk.Checked, Borderless = borderless.Checked, Perf = perf.Checked });
+        if (doInstall) p.Install(new Options { Dxvk = dxvk.Checked, Borderless = borderless.Checked, Perf = perf.Checked, Music = music.Checked });
         else p.Uninstall();
         Cursor = Cursors.Default;
         Refresh();

@@ -6,6 +6,7 @@ Quality-of-life fixes for **The Matrix Online 7.6005** (e.g. on [Rejacked](https
 - **DXVK** (Vulkan) renderer, smoother on modern GPUs
 - **mxoperf**: FPS cap (focused and background), FPS overlay (Ctrl+Alt+O), frame-time capture (Ctrl+Alt+P), render thread pinned to the fast cores (Intel hybrid / AMD X3D)
 - **Hardware vertex processing**: the game no longer switches to software vertex processing
+- **Alt-tab music fix**: music no longer stays silent after alt-tabbing out of fullscreen and back
 
 ![Installer](docs/installer.png)
 
@@ -20,13 +21,13 @@ Character select still switches to an 800x600 window, as in the stock game.
 
 Run it again any time to change the options. **Uninstall** puts back the original `client.dll`, deletes every file it added and removes its lines from `autoexec.cfg`.
 
-Command line: `MXO_QoL_Installer.exe /install "C:\Games\MxO_7.6005" [/nodxvk] [/noborderless] [/noperf]` or `/uninstall "<folder>"`.
+Command line: `MXO_QoL_Installer.exe /install "C:\Games\MxO_7.6005" [/nodxvk] [/noborderless] [/noperf] [/nomusic]` or `/uninstall "<folder>"`.
 
 ## What it changes
 
 | File | Change |
 |---|---|
-| `client.dll` | Backed up to `QoL_backup\client.dll`, then 14 small code changes (see below). The installer checks every original byte first and changes nothing if your `client.dll` is a different build. |
+| `client.dll` | Backed up to `QoL_backup\client.dll`, then a few small code changes (see below). The installer checks every original byte first and changes nothing if your `client.dll` is a different build. |
 | `r3dx.dll` | Made from **your own** `r3d9.dll` with its `d3d9.dll` import renamed to `dxv9.dll`, so the game can load DXVK from its folder. If DXVK is off it is an unmodified copy. |
 | `dxv9.dll`, `dxvk.conf`, `DXVK_LICENSE.txt` | DXVK 3.1.1 (32-bit `d3d9.dll`). Only when DXVK is on. |
 | `mxoperf.dll`, `mxoperf.ini` | Only when mxoperf is on. Your existing `mxoperf.ini` is kept. |
@@ -38,6 +39,7 @@ The `client.dll` changes:
 - **Renderer:** loads `r3dx.dll` instead of `r3d9.dll`.
 - **mxoperf hook:** loads `mxoperf.dll` if it's there and calls it once per frame before Present.
 - **Hardware vertex processing:** `SetSoftwareVertexProcessing` is always `FALSE`.
+- **Music fix:** coming back from a minimised fullscreen window ran the music pause twice, and the second run saved the already-zero volume over the real one. The pause function (48 bytes, found by byte pattern) now only saves the volume when it is not zero.
 - **Relocations:** the game DLL loads at a different address each time, so the 17 address fix-ups the new code needs are added to its relocation table and the 3 under the overwritten instructions are disabled.
 
 ## Building
