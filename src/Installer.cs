@@ -13,9 +13,18 @@ using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
+[assembly: AssemblyTitle("MXO QoL Patch Installer")]
+[assembly: AssemblyDescription("Installs and uninstalls the MXO QoL Patch for The Matrix Online 7.6005")]
+[assembly: AssemblyCompany("cgtheodorou")]
+[assembly: AssemblyProduct("MXO QoL Patch")]
+[assembly: AssemblyCopyright("cgtheodorou")]
+[assembly: AssemblyVersion("1.1.1.0")]
+[assembly: AssemblyFileVersion("1.1.1.0")]
+[assembly: AssemblyInformationalVersion("1.1.1")]
+
 static class Program
 {
-    public const string Version = "1.1.0";
+    public const string Version = "1.1.1";
 
     [STAThread]
     static int Main(string[] args)
@@ -37,7 +46,8 @@ static class Program
             return ok ? 0 : 1;
         }
         Application.EnableVisualStyles();
-        Application.Run(new MainForm());
+        // A single folder argument (used when restarting as administrator) pre-fills the folder box.
+        Application.Run(new MainForm(args.Length == 1 ? args[0] : null));
         return 0;
     }
 
@@ -78,6 +88,9 @@ class Patcher
         {
             log("Installing to " + game);
             if (!Preflight()) return false;
+            foreach (var f in DataFiles)
+                if (!File.Exists(Path.Combine(DataDir, f)))
+                    return Fail("data\\" + f + " is missing. Extract the whole zip and run the installer from the extracted folder.");
             Directory.CreateDirectory(backup);
 
             if (!PatchClient()) return false;
@@ -243,9 +256,14 @@ class Patcher
 
     bool Fail(string msg) { log("! " + msg); return false; }
 
-    static string AdminHint(Exception e)
+    // Set when Windows refused a write, so the window can offer to restart the installer as administrator.
+    public bool NeedsAdmin;
+
+    string AdminHint(Exception e)
     {
-        return e is UnauthorizedAccessException ? " (try running the installer as administrator)" : "";
+        if (!(e is UnauthorizedAccessException)) return "";
+        NeedsAdmin = true;
+        return " (the game folder needs administrator rights)";
     }
 
     static bool Delete(string path)
@@ -295,14 +313,13 @@ class Patcher
         return b;
     }
 
+    // The files the installer copies live in a "data" folder next to the exe (shipped in the same zip).
+    static readonly string DataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data");
+    static readonly string[] DataFiles = { "client_qol.patch", "dxv9.dll", "dxvk.conf", "DXVK_LICENSE.txt", "mxoperf.dll", "mxoperf.ini" };
+
     static byte[] Resource(string name)
     {
-        using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(name))
-        using (var m = new MemoryStream())
-        {
-            s.CopyTo(m);
-            return m.ToArray();
-        }
+        return File.ReadAllBytes(Path.Combine(DataDir, name));
     }
 }
 
@@ -320,7 +337,7 @@ class MainForm : Form
     readonly TextBox logBox = new TextBox();
     readonly Label status = new Label();
 
-    public MainForm()
+    public MainForm(string startFolder)
     {
         SuspendLayout();
         Font = new Font("Segoe UI", 9f);
@@ -374,7 +391,7 @@ class MainForm : Form
         Controls.AddRange(new Control[] { intro, folderLabel, folder, browse, dxvk, borderless, perf, music, install, uninstall, status, logBox });
         ResumeLayout(false);
         PerformLayout();
-        folder.Text = DetectFolder();
+        folder.Text = startFolder != null && Patcher.LooksLikeGame(startFolder) ? startFolder : DetectFolder();
         Refresh();
     }
 
@@ -393,10 +410,22 @@ class MainForm : Form
         logBox.Clear();
         var p = new Patcher(folder.Text, delegate(string s) { logBox.AppendText(s + Environment.NewLine); });
         Cursor = Cursors.WaitCursor;
-        if (doInstall) p.Install(new Options { Dxvk = dxvk.Checked, Borderless = borderless.Checked, Perf = perf.Checked, Music = music.Checked });
-        else p.Uninstall();
+        bool ok = doInstall
+            ? p.Install(new Options { Dxvk = dxvk.Checked, Borderless = borderless.Checked, Perf = perf.Checked, Music = music.Checked })
+            : p.Uninstall();
         Cursor = Cursors.Default;
         Refresh();
+        if (!ok && p.NeedsAdmin && MessageBox.Show(this,
+                "Windows needs administrator rights to change files in this folder. Restart the installer as administrator?",
+                Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(Application.ExecutablePath, "\"" + folder.Text + "\"") { Verb = "runas", UseShellExecute = true });
+                Close();
+            }
+            catch (System.ComponentModel.Win32Exception) { } // the user said no to the Windows prompt
+        }
     }
 
     static string DetectFolder()
