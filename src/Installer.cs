@@ -18,13 +18,13 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("cgtheodorou")]
 [assembly: AssemblyProduct("MXO QoL Patch")]
 [assembly: AssemblyCopyright("cgtheodorou")]
-[assembly: AssemblyVersion("1.2.1.0")]
-[assembly: AssemblyFileVersion("1.2.1.0")]
-[assembly: AssemblyInformationalVersion("1.2.1")]
+[assembly: AssemblyVersion("1.2.2.0")]
+[assembly: AssemblyFileVersion("1.2.2.0")]
+[assembly: AssemblyInformationalVersion("1.2.2")]
 
 static class Program
 {
-    public const string Version = "1.2.1";
+    public const string Version = "1.2.2";
 
     [STAThread]
     static int Main(string[] args)

@@ -44,7 +44,7 @@ The installer is built from `src\Installer.cs` in this repo, so you can read wha
 |---|---|
 | `client.dll` | Backed up to `QoL_backup\client.dll`, then a few small code changes (see below). The installer checks every original byte first and changes nothing if your `client.dll` is a different build. |
 | `r3dx.dll` | Made from **your own** `r3d9.dll` with its `d3d9.dll` import renamed to `dxv9.dll`, so the game can load DXVK from its folder. If DXVK is off it is an unmodified copy. |
-| `dxv9.dll`, `dxvk.conf`, `DXVK_LICENSE.txt` | DXVK 3.1.1 (32-bit `d3d9.dll`). Only when DXVK is on. |
+| `dxv9.dll`, `dxvk.conf`, `DXVK_LICENSE.txt` | DXVK 3.1.1 (32-bit `d3d9.dll`). `dxvk.conf` also keeps DXVK's memory use down, because the game only has 2 GB of address space. Only when DXVK is on. |
 | `mxoperf.dll`, `mxoperf.ini` | Only when mxoperf is on. Your existing `mxoperf.ini` is kept. |
 | `autoexec.cfg` | A marked block with `Windowed = 2` and `ScreenWidth`/`ScreenHeight` set to your desktop size. |
 | `%AppData%\The Matrix Online\options.cfg` | The game saves its options here and loads them after `autoexec.cfg`, so a saved `Windowed = 0` (e.g. from when the launcher forced fullscreen) would override borderless. With borderless on, that line is set to `Windowed = 2`; the old value is put back when borderless is turned off or on uninstall. |
