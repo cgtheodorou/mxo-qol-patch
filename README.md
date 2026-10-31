@@ -28,11 +28,11 @@ Command line: `MXO_QoL_Installer.exe /install "C:\Games\MxO_7.6005" [/nodxvk] [/
 
 ## VirusTotal
 
-The 1.1.1 download, [`MXO_QoL_Patch.zip`](https://www.virustotal.com/gui/file/4594d468cb148c8fb8e4e42c517512fb7f89280a0cbd1d4fca06fd6a223a401a/detection), scans clean (0/66). The files inside it:
+The 1.2.0 download, [`MXO_QoL_Patch.zip`](https://www.virustotal.com/gui/file/89c64b3744632435c8c8ee8b8676e70f5c8d13b9f17f5c4ee9f1ccf7c3f74970/detection), scans clean (0/67). The files inside it:
 
 | File | SHA-256 | Result |
 |---|---|---|
-| `MXO_QoL_Installer.exe` | `813d6889c0907d4a82c7d759ced22d4db466f87c7ae252b4cc8688c10955ef65` | [1/71](https://www.virustotal.com/gui/file/813d6889c0907d4a82c7d759ced22d4db466f87c7ae252b4cc8688c10955ef65/detection) (SecureAge's generic "Malicious" flag on small unsigned programs) |
+| `MXO_QoL_Installer.exe` | `1185a99b4691f4b8b6742376ddf3c881b9cd683a64b13e99ada527055795a2e6` | [1/70](https://www.virustotal.com/gui/file/1185a99b4691f4b8b6742376ddf3c881b9cd683a64b13e99ada527055795a2e6/detection) (SecureAge's generic "Malicious" flag on small unsigned programs) |
 | `data\mxoperf.dll` | `50b57b003a1b6d9fc0c87ee1320cf1db3097035c1d867f9b0311e2c1c5027be3` | [0/71](https://www.virustotal.com/gui/file/50b57b003a1b6d9fc0c87ee1320cf1db3097035c1d867f9b0311e2c1c5027be3/detection) |
 | `data\dxv9.dll` (DXVK) | `265888c31ca78dffa290c39cb7e50bfb02762590e41927906e46fb32f01497fa` | [0/71](https://www.virustotal.com/gui/file/265888c31ca78dffa290c39cb7e50bfb02762590e41927906e46fb32f01497fa/detection) |
 
