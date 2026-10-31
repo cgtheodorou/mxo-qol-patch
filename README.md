@@ -20,7 +20,7 @@ Quality-of-life fixes for **The Matrix Online 7.6005** (e.g. on [Rejacked](https
 
 Character select still switches to an 800x600 window, as in the stock game.
 
-Run it again any time to change the options. **Uninstall** puts back the original `client.dll`, deletes every file it added and removes its lines from `autoexec.cfg`.
+Run it again any time to change the options. **Uninstall** puts back the original `client.dll`, deletes every file it added, removes its lines from `autoexec.cfg` and puts back the `Windowed` value in the game's saved options.
 
 **UI scale** is off by default. 2x suits 4K (3840x2160) and 1.5x suits 1440p to 1800p. The interface never lays out smaller than the 800x600 it was designed for, so on smaller screens the scale is lowered to fit, and the 800x600 character select stays at 1x. The installer shows the scale already installed, so **Reinstall** keeps it unless you change it.
 
@@ -47,6 +47,7 @@ The installer is built from `src\Installer.cs` in this repo, so you can read wha
 | `dxv9.dll`, `dxvk.conf`, `DXVK_LICENSE.txt` | DXVK 3.1.1 (32-bit `d3d9.dll`). Only when DXVK is on. |
 | `mxoperf.dll`, `mxoperf.ini` | Only when mxoperf is on. Your existing `mxoperf.ini` is kept. |
 | `autoexec.cfg` | A marked block with `Windowed = 2` and `ScreenWidth`/`ScreenHeight` set to your desktop size. |
+| `%AppData%\The Matrix Online\options.cfg` | The game saves its options here and loads them after `autoexec.cfg`, so a saved `Windowed = 0` (e.g. from when the launcher forced fullscreen) would override borderless. With borderless on, that line is set to `Windowed = 2`; the old value is put back when borderless is turned off or on uninstall. |
 
 The `client.dll` changes:
 

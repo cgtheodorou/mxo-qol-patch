@@ -18,13 +18,13 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("cgtheodorou")]
 [assembly: AssemblyProduct("MXO QoL Patch")]
 [assembly: AssemblyCopyright("cgtheodorou")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
-[assembly: AssemblyInformationalVersion("1.2.0")]
+[assembly: AssemblyVersion("1.2.1.0")]
+[assembly: AssemblyFileVersion("1.2.1.0")]
+[assembly: AssemblyInformationalVersion("1.2.1")]
 
 static class Program
 {
-    public const string Version = "1.2.0";
+    public const string Version = "1.2.1";
 
     [STAThread]
     static int Main(string[] args)
@@ -153,9 +153,14 @@ class Patcher
                 File.AppendAllText(cfg, "\r\n" + BlockStart + "\r\nWindowed = 2\r\nScreenWidth = " + w +
                     "\r\nScreenHeight = " + h + "\r\n" + BlockEnd + "\r\n");
                 log("  Borderless on: autoexec.cfg -> Windowed = 2 at " + w + "x" + h + ".");
+                SetSavedWindowed();
                 log("  Keep the Rejacked launcher's window mode on \"Game setting\" or it overrides this.");
             }
-            else log("  Borderless off (window mode left alone).");
+            else
+            {
+                RestoreSavedWindowed();
+                log("  Borderless off (window mode left alone).");
+            }
 
             log("Done. Start the game.");
             return true;
@@ -281,6 +286,7 @@ class Patcher
                     if (f.Trim().Length > 0 && Delete(Path.Combine(game, f))) log("  Removed " + f);
             RemoveCfgBlock();
             log("  Removed the borderless lines from autoexec.cfg.");
+            RestoreSavedWindowed();
             Directory.Delete(backup, true);
             log("Done. The game is back to stock.");
             return true;
@@ -304,6 +310,38 @@ class Patcher
         string re = "(\r\n)?" + Regex.Escape(BlockStart) + "[\\s\\S]*?" + Regex.Escape(BlockEnd) + "\r\n";
         string stripped = Regex.Replace(text, re, "");
         if (stripped != text) File.WriteAllText(cfg, stripped);
+    }
+
+    // The game saves its options to %AppData%\The Matrix Online\options.cfg and loads that after autoexec.cfg,
+    // so a Windowed = 0 saved there (e.g. while the launcher forced fullscreen) overrides borderless. The old
+    // value is kept in QoL_backup and put back when borderless is turned off or the patch is uninstalled.
+    static readonly string OptionsCfg = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"The Matrix Online\options.cfg");
+    static readonly Regex WindowedLine = new Regex(@"^(Windowed[ \t]*=[ \t]*)(\S*)", RegexOptions.Multiline);
+    string SavedWindowed { get { return Path.Combine(backup, "options_windowed.txt"); } }
+
+    void SetSavedWindowed()
+    {
+        if (!File.Exists(OptionsCfg)) return;
+        string text = File.ReadAllText(OptionsCfg);
+        Match m = WindowedLine.Match(text);
+        if (!m.Success || m.Groups[2].Value == "2") return;
+        if (!File.Exists(SavedWindowed)) File.WriteAllText(SavedWindowed, m.Groups[2].Value);
+        File.WriteAllText(OptionsCfg, WindowedLine.Replace(text, "${1}2", 1));
+        log("  The game's saved options had Windowed = " + m.Groups[2].Value + " (overrides borderless); set to 2.");
+    }
+
+    void RestoreSavedWindowed()
+    {
+        if (!File.Exists(OptionsCfg)) return;
+        string text = File.ReadAllText(OptionsCfg);
+        Match m = WindowedLine.Match(text);
+        // The stock game has no borderless, so a 2 with nothing saved goes back to plain windowed.
+        string old = File.Exists(SavedWindowed) ? File.ReadAllText(SavedWindowed).Trim() : "1";
+        Delete(SavedWindowed);
+        if (!m.Success || m.Groups[2].Value != "2") return;
+        File.WriteAllText(OptionsCfg, WindowedLine.Replace(text, "${1}" + old, 1));
+        log("  The game's saved options: Windowed set back to " + old + ".");
     }
 
     bool Fail(string msg) { log("! " + msg); return false; }
