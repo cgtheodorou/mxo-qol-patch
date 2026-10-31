@@ -1,5 +1,5 @@
-// MXO QoL Patch installer: borderless window, DXVK, mxoperf, hardware vertex processing and the
-// alt-tab music fix for The Matrix Online 7.6005.
+// MXO QoL Patch installer: borderless window, DXVK, mxoperf, hardware vertex processing, the
+// alt-tab music fix and UI scale for The Matrix Online 7.6005.
 // Build: build.cmd (uses the .NET Framework 4 csc.exe that ships with Windows).
 using System;
 using System.Collections.Generic;
@@ -18,18 +18,19 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("cgtheodorou")]
 [assembly: AssemblyProduct("MXO QoL Patch")]
 [assembly: AssemblyCopyright("cgtheodorou")]
-[assembly: AssemblyVersion("1.1.1.0")]
-[assembly: AssemblyFileVersion("1.1.1.0")]
-[assembly: AssemblyInformationalVersion("1.1.1")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyInformationalVersion("1.2.0")]
 
 static class Program
 {
-    public const string Version = "1.1.1";
+    public const string Version = "1.2.0";
 
     [STAThread]
     static int Main(string[] args)
     {
-        // Command line: /install "<MxO folder>" [/nodxvk] [/noborderless] [/noperf] [/nomusic]   |   /uninstall "<MxO folder>"
+        // Command line: /install "<MxO folder>" [/nodxvk] [/noborderless] [/noperf] [/nomusic] [/uiscale 1.5|2.0]
+        //               /uninstall "<MxO folder>"
         if (args.Length >= 2 && (Is(args[0], "/install") || Is(args[0], "/uninstall")))
         {
             Native.AttachConsole(-1);
@@ -40,6 +41,12 @@ static class Program
                 if (Is(args[i], "/noborderless")) opt.Borderless = false;
                 if (Is(args[i], "/noperf")) opt.Perf = false;
                 if (Is(args[i], "/nomusic")) opt.Music = false;
+                if (Is(args[i], "/uiscale") && i + 1 < args.Length)
+                {
+                    string want = args[++i];
+                    opt.UiScale = Array.Find(Patcher.UiScales, s => s == want);
+                    if (opt.UiScale == null) { Console.WriteLine("! /uiscale takes " + string.Join(" or ", Patcher.UiScales) + "."); return 1; }
+                }
             }
             var p = new Patcher(args[1], Console.WriteLine);
             bool ok = Is(args[0], "/install") ? p.Install(opt) : p.Uninstall();
@@ -54,7 +61,7 @@ static class Program
     static bool Is(string a, string b) { return string.Equals(a, b, StringComparison.OrdinalIgnoreCase); }
 }
 
-class Options { public bool Dxvk, Borderless, Perf, Music; }
+class Options { public bool Dxvk, Borderless, Perf, Music; public string UiScale; } // UiScale null = off
 
 class Patcher
 {
@@ -93,8 +100,11 @@ class Patcher
                     return Fail("data\\" + f + " is missing. Extract the whole zip and run the installer from the extracted folder.");
             Directory.CreateDirectory(backup);
 
+            // The UI scale patch sits on top of the QoL patch (both grow the relocation table), so take it off first.
+            RemoveUiScale();
             if (!PatchClient()) return false;
             if (!PatchMusic(opt.Music)) return false;
+            if (!ApplyUiScale(opt.UiScale)) return false;
 
             var files = new List<string>();
             // r3dx.dll: the player's own r3d9.dll, importing dxv9.dll (DXVK) instead of d3d9.dll.
@@ -155,7 +165,7 @@ class Patcher
 
     bool PatchClient()
     {
-        var sites = ReadPatch();
+        var sites = ReadPatch("client_qol.patch");
         byte[] buf = File.ReadAllBytes(client);
         int asOld = 0, asNew = 0;
         foreach (var s in sites)
@@ -203,6 +213,48 @@ class Patcher
             log("  Music fix off.");
         }
         else log("  Music fix off.");
+        return true;
+    }
+
+    // UI scale: the interface lays out at screen size / scale and is drawn scaled up, with mouse input, world
+    // picking and name tags converted to match. One patch file per scale (data\client_ui<scale>.patch), applied
+    // on top of the QoL patch. The game lowers the scale so the UI never lays out smaller than 800x600.
+    public static readonly string[] UiScales = { "1.5", "2.0" };
+
+    static string UiPatchName(string scale) { return "client_ui" + scale + ".patch"; }
+
+    // The scale currently in client.dll, or null.
+    public string CurrentUiScale()
+    {
+        if (!File.Exists(client)) return null;
+        byte[] buf = File.ReadAllBytes(client);
+        foreach (var sc in UiScales)
+        {
+            if (!File.Exists(Path.Combine(DataDir, UiPatchName(sc)))) continue;
+            if (ReadPatch(UiPatchName(sc)).TrueForAll(s => Same(buf, s.Off, s.New))) return sc;
+        }
+        return null;
+    }
+
+    void RemoveUiScale()
+    {
+        string cur = CurrentUiScale();
+        if (cur == null) return;
+        byte[] buf = File.ReadAllBytes(client);
+        foreach (var s in ReadPatch(UiPatchName(cur))) Buffer.BlockCopy(s.Old, 0, buf, s.Off, s.Old.Length);
+        File.WriteAllBytes(client, buf);
+    }
+
+    bool ApplyUiScale(string scale)
+    {
+        if (scale == null) { log("  UI scale off."); return true; }
+        var sites = ReadPatch(UiPatchName(scale));
+        byte[] buf = File.ReadAllBytes(client);
+        if (!sites.TrueForAll(s => Same(buf, s.Off, s.Old)))
+            return Fail("client.dll doesn't match the UI scale patch. Set UI scale to Off and try again.");
+        foreach (var s in sites) Buffer.BlockCopy(s.New, 0, buf, s.Off, s.New.Length);
+        File.WriteAllBytes(client, buf);
+        log("  UI scale " + scale + "x on (less on smaller screens; 800x600 stays 1x).");
         return true;
     }
 
@@ -294,10 +346,10 @@ class Patcher
 
     class Site { public int Off; public byte[] Old, New; }
 
-    static List<Site> ReadPatch()
+    static List<Site> ReadPatch(string name)
     {
         var list = new List<Site>();
-        foreach (var line in Encoding.ASCII.GetString(Resource("client_qol.patch")).Split('\n'))
+        foreach (var line in Encoding.ASCII.GetString(Resource(name)).Split('\n'))
         {
             var f = line.Trim().Split(' ');
             if (f.Length != 3) continue;
@@ -315,7 +367,7 @@ class Patcher
 
     // The files the installer copies live in a "data" folder next to the exe (shipped in the same zip).
     static readonly string DataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data");
-    static readonly string[] DataFiles = { "client_qol.patch", "dxv9.dll", "dxvk.conf", "DXVK_LICENSE.txt", "mxoperf.dll", "mxoperf.ini" };
+    static readonly string[] DataFiles = { "client_qol.patch", "client_ui1.5.patch", "client_ui2.0.patch", "dxv9.dll", "dxvk.conf", "DXVK_LICENSE.txt", "mxoperf.dll", "mxoperf.ini" };
 
     static byte[] Resource(string name)
     {
@@ -333,6 +385,8 @@ class MainForm : Form
 {
     readonly TextBox folder = new TextBox();
     readonly CheckBox dxvk = new CheckBox(), borderless = new CheckBox(), perf = new CheckBox(), music = new CheckBox();
+    readonly ComboBox uiScale = new ComboBox();
+    string scaleFolder; // the folder uiScale was last set from
     readonly Button install = new Button(), uninstall = new Button();
     readonly TextBox logBox = new TextBox();
     readonly Label status = new Label();
@@ -344,7 +398,7 @@ class MainForm : Form
         AutoScaleDimensions = new SizeF(7f, 15f);
         AutoScaleMode = AutoScaleMode.Font;
         Text = "MXO QoL Patch " + Program.Version;
-        ClientSize = new Size(560, 466);
+        ClientSize = new Size(560, 496);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
@@ -377,18 +431,28 @@ class MainForm : Form
         {
             c.Checked = true; c.AutoSize = true; c.Location = new Point(12, y); y += 26;
         }
+        uiScale.DropDownStyle = ComboBoxStyle.DropDownList;
+        uiScale.Items.Add("Off");
+        foreach (var sc in Patcher.UiScales) uiScale.Items.Add(sc + "x");
+        uiScale.SelectedIndex = 0;
+        uiScale.Location = new Point(15, y + 1); uiScale.Width = 60;
+        var uiScaleLabel = new Label
+        {
+            Text = "UI scale for high resolutions (2x suits 4K)",
+            Location = new Point(82, y + 4), AutoSize = true
+        };
 
-        install.Text = "Install"; install.Location = new Point(12, 226); install.Size = new Size(110, 30);
-        uninstall.Text = "Uninstall"; uninstall.Location = new Point(130, 226); uninstall.Size = new Size(110, 30);
+        install.Text = "Install"; install.Location = new Point(12, 256); install.Size = new Size(110, 30);
+        uninstall.Text = "Uninstall"; uninstall.Location = new Point(130, 256); uninstall.Size = new Size(110, 30);
         install.Click += delegate { Run(true); };
         uninstall.Click += delegate { Run(false); };
-        status.Location = new Point(252, 233); status.AutoSize = true;
+        status.Location = new Point(252, 263); status.AutoSize = true;
 
         logBox.Multiline = true; logBox.ReadOnly = true; logBox.ScrollBars = ScrollBars.Vertical;
-        logBox.Location = new Point(12, 266); logBox.Size = new Size(536, 188);
+        logBox.Location = new Point(12, 296); logBox.Size = new Size(536, 188);
         logBox.BackColor = SystemColors.Window;
 
-        Controls.AddRange(new Control[] { intro, folderLabel, folder, browse, dxvk, borderless, perf, music, install, uninstall, status, logBox });
+        Controls.AddRange(new Control[] { intro, folderLabel, folder, browse, dxvk, borderless, perf, music, uiScale, uiScaleLabel, install, uninstall, status, logBox });
         ResumeLayout(false);
         PerformLayout();
         folder.Text = startFolder != null && Patcher.LooksLikeGame(startFolder) ? startFolder : DetectFolder();
@@ -403,6 +467,14 @@ class MainForm : Form
         install.Text = inst ? "Reinstall" : "Install";
         uninstall.Enabled = inst;
         status.Text = !ok ? "No client.dll / r3d9.dll in this folder." : inst ? "Installed." : "Not installed.";
+        // Show the UI scale already in the game's client.dll, so Reinstall keeps it unless changed.
+        if (ok && folder.Text != scaleFolder)
+        {
+            scaleFolder = folder.Text;
+            string cur = null;
+            try { cur = new Patcher(folder.Text, delegate { }).CurrentUiScale(); } catch { }
+            uiScale.SelectedIndex = cur == null ? 0 : 1 + Array.IndexOf(Patcher.UiScales, cur);
+        }
     }
 
     void Run(bool doInstall)
@@ -411,7 +483,11 @@ class MainForm : Form
         var p = new Patcher(folder.Text, delegate(string s) { logBox.AppendText(s + Environment.NewLine); });
         Cursor = Cursors.WaitCursor;
         bool ok = doInstall
-            ? p.Install(new Options { Dxvk = dxvk.Checked, Borderless = borderless.Checked, Perf = perf.Checked, Music = music.Checked })
+            ? p.Install(new Options
+            {
+                Dxvk = dxvk.Checked, Borderless = borderless.Checked, Perf = perf.Checked, Music = music.Checked,
+                UiScale = uiScale.SelectedIndex == 0 ? null : Patcher.UiScales[uiScale.SelectedIndex - 1]
+            })
             : p.Uninstall();
         Cursor = Cursors.Default;
         Refresh();
