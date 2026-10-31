@@ -28,11 +28,11 @@ Command line: `MXO_QoL_Installer.exe /install "C:\Games\MxO_7.6005" [/nodxvk] [/
 
 ## VirusTotal
 
-The 1.2.0 download, [`MXO_QoL_Patch.zip`](https://www.virustotal.com/gui/file/89c64b3744632435c8c8ee8b8676e70f5c8d13b9f17f5c4ee9f1ccf7c3f74970/detection), scans clean (0/67). The files inside it:
+The 1.2.2 download, [`MXO_QoL_Patch.zip`](https://www.virustotal.com/gui/file/588c227398bc4f9c1ef4c11d7ba65d64952b700cdc32a7704f31914434f5d98b/detection) (SHA-256 `588c227398bc4f9c1ef4c11d7ba65d64952b700cdc32a7704f31914434f5d98b`), scans 1/67: Bkav Pro's generic `W32.Malware` flag on the installer inside it. The files inside it:
 
 | File | SHA-256 | Result |
 |---|---|---|
-| `MXO_QoL_Installer.exe` | `1185a99b4691f4b8b6742376ddf3c881b9cd683a64b13e99ada527055795a2e6` | [1/70](https://www.virustotal.com/gui/file/1185a99b4691f4b8b6742376ddf3c881b9cd683a64b13e99ada527055795a2e6/detection) (SecureAge's generic "Malicious" flag on small unsigned programs) |
+| `MXO_QoL_Installer.exe` | `44027d66dcf49fdcf6ef35871347f6e0bf0032f407c4a93a844156bf74f384e0` | [3/70](https://www.virustotal.com/gui/file/44027d66dcf49fdcf6ef35871347f6e0bf0032f407c4a93a844156bf74f384e0/detection) (generic flags from Bkav Pro, Kingsoft and SecureAge, which these engines give small unsigned programs; the 1.2.0 build of the same installer had 1/70) |
 | `data\mxoperf.dll` | `50b57b003a1b6d9fc0c87ee1320cf1db3097035c1d867f9b0311e2c1c5027be3` | [0/71](https://www.virustotal.com/gui/file/50b57b003a1b6d9fc0c87ee1320cf1db3097035c1d867f9b0311e2c1c5027be3/detection) |
 | `data\dxv9.dll` (DXVK) | `265888c31ca78dffa290c39cb7e50bfb02762590e41927906e46fb32f01497fa` | [0/71](https://www.virustotal.com/gui/file/265888c31ca78dffa290c39cb7e50bfb02762590e41927906e46fb32f01497fa/detection) |
 
